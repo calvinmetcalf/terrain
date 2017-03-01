@@ -334,7 +334,7 @@ function fillSinks(h, epsilon) {
 function getFlux(h) {
     var dh = downhill(h);
     var idxs = [];
-    var flux = zero(h.mesh); 
+    var flux = zero(h.mesh);
     for (var i = 0; i < h.length; i++) {
         idxs[i] = i;
         flux[i] = 1/h.length;
@@ -424,7 +424,7 @@ function cleanCoast(h, iters) {
                 if (h[nbs[j]] > 0) {
                     count++;
                 } else if (h[nbs[j]] > best) {
-                    best = h[nbs[j]];    
+                    best = h[nbs[j]];
                 }
             }
             if (count > 1) continue;
@@ -495,6 +495,11 @@ function placeCity(render) {
     var score = cityScore(render.h, render.cities);
     var newcity = d3.scan(score, d3.descending);
     render.cities.push(newcity);
+}
+
+function addTer(render) {
+  var params = render.params;
+  params.nterrs++;
 }
 
 function placeCities(render) {
@@ -591,9 +596,89 @@ function getTerritories(render) {
         }
     }
     terr.mesh = h.mesh;
+    cleanTerritories(terr, render);
     return terr;
 }
+function shuffle(array, short) {
+  if (short) {
+    array.push(array.shift());
+    return;
+  }
+  var currentIndex = array.length, temporaryValue, randomIndex;
 
+  // While there remain elements to shuffle...
+  while (0 !== currentIndex) {
+
+    // Pick a remaining element...
+    randomIndex = Math.floor(Math.random() * currentIndex);
+    currentIndex -= 1;
+
+    // And swap it with the current element.
+    temporaryValue = array[currentIndex];
+    array[currentIndex] = array[randomIndex];
+    array[randomIndex] = temporaryValue;
+  }
+}
+function cleanTerritories(terr, render) {
+   var h = render.h;
+   var cons = {};
+   var t1, t2;
+   for (var i = 0; i < terr.mesh.edges.length; i++) {
+       var e = terr.mesh.edges[i];
+       if (e[3] == undefined) continue;
+       if (terr[e[0]] != terr[e[1]]) {
+         t1 = terr[e[0]]
+         t2 =  terr[e[1]];
+          if (!cons[t1]) {
+            cons[t1] = {};
+          }
+          cons[t1][t2] = true;
+          if (!cons[t2]) {
+            cons[t2] = {};
+          }
+          cons[t2][t1] = true;
+       }
+   }
+   var value, nval, cantuse, i;
+   var colors = {};
+   var keys = Object.keys(cons);
+   var max = 5;
+   var run = 0;
+   while (max > 4) {
+     run++;
+     max = -1;
+     colors = {};
+     for (var key of keys) {
+       value = cons[key];
+       cantuse = {};
+       for (var neigh in value) {
+         nval = cons[neigh];
+         if (colors[neigh]) {
+           cantuse[colors[neigh]] = true;
+         }
+       }
+       i = 1
+       while(cantuse[i]){
+         i++;
+       }
+       max = Math.max(max, i);
+       colors[key] = i;
+     }
+     if (max > 4) {
+       shuffle(keys, run < 5);
+     }
+   }
+   terr.cons = [];
+   for (i = 0; i < terr.length; i++) {
+     value = terr[i];
+     if (colors[value]) {
+       terr.cons[i] = colors[value];
+       continue;
+     }
+     terr.cons[i] = value;
+   }
+   terr.cons.mesh = terr.mesh;
+}
 function getBorders(render) {
     var terr = render.terr;
     var h = render.h;
@@ -698,7 +783,7 @@ function visualizeVoronoi(svg, field, lo, hi) {
     tris.enter()
         .append('path')
         .classed('field', true);
-    
+
     tris.exit()
         .remove();
 
@@ -976,7 +1061,7 @@ function drawLabels(svg, render) {
             if (terr[j] != city) score -= 3000;
             for (var k = 0; k < cities.length; k++) {
                 var u = h.mesh.vxs[cities[k]];
-                if (Math.abs(v[0] - u[0]) < sx && 
+                if (Math.abs(v[0] - u[0]) < sx &&
                     Math.abs(v[1] - sy/2 - u[1]) < sy) {
                     score -= k < nterrs ? 4000 : 500;
                 }
@@ -1007,10 +1092,10 @@ function drawLabels(svg, render) {
             }
         }
         reglabels.push({
-            text: text, 
-            x: h.mesh.vxs[best][0], 
-            y: h.mesh.vxs[best][1], 
-            size:sy, 
+            text: text,
+            x: h.mesh.vxs[best][0],
+            y: h.mesh.vxs[best][1],
+            size:sy,
             width:sx
         });
     }
@@ -1048,9 +1133,9 @@ function doMap(svg, params) {
     };
     var width = svg.attr('width');
     svg.attr('height', width * params.extent.height / params.extent.width);
-    svg.attr('viewBox', -1000 * params.extent.width/2 + ' ' + 
-                        -1000 * params.extent.height/2 + ' ' + 
-                        1000 * params.extent.width + ' ' + 
+    svg.attr('viewBox', -1000 * params.extent.width/2 + ' ' +
+                        -1000 * params.extent.height/2 + ' ' +
+                        1000 * params.extent.width + ' ' +
                         1000 * params.extent.height);
     svg.selectAll().remove();
     render.h = params.generator(params);
@@ -1061,7 +1146,7 @@ function doMap(svg, params) {
 var defaultParams = {
     extent: defaultExtent,
     generator: generateCoast,
-    npts: 16384,
+    npts: 65536,
     ncities: 15,
     nterrs: 5,
     fontsizes: {
@@ -1070,4 +1155,3 @@ var defaultParams = {
         town: 20
     }
 }
-
